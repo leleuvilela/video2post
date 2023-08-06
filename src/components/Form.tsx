@@ -6,6 +6,9 @@ import { UploadStep } from './UploadStep'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
+import { Video } from '@/hooks/useVideos'
+import { useLocalStorage } from '@/hooks/useLocalStorage'
+import { FinishStep } from './FinishStep'
 
 const formSchema = z.object({
   transcriptionPrompt: z.string().nonempty(),
@@ -13,17 +16,15 @@ const formSchema = z.object({
 
 type FormSchema = z.infer<typeof formSchema>
 
-export function MainForm() {
-  const [loading, setLoading] = useState(false)
-  const [step, setStep] = useState<'upload' | 'transcribe' | 'generate'>(
+export function Form() {
+  const [videosKeys, setVideosKeys] = useLocalStorage<string[]>('videos', [])
+  const [isTranscribing, setIsTranscribing] = useState(false)
+  const [step, setStep] = useLocalStorage<'upload' | 'transcribe' | 'generate'>(
+    'step',
     'upload',
   )
 
-  const {
-    register,
-    handleSubmit,
-    formState: { isSubmitting },
-  } = useForm<FormSchema>({
+  const { register, handleSubmit } = useForm<FormSchema>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       transcriptionPrompt: 'Esse vídeo fala sobre Typescript, React e Next.js.',
@@ -31,31 +32,40 @@ export function MainForm() {
   })
 
   async function submit(data: FormSchema) {
-    setLoading(true)
-
     try {
-      const response = await fetch('/api/transcribe', {
+      setIsTranscribing(true)
+      const responseTranscribe = await fetch('/api/ai/transcribe', {
         method: 'POST',
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          videoKey: videosKeys[0],
+          transcriptionPrompt: data.transcriptionPrompt,
+        }),
       }).then((response) => response.json())
 
-      console.log(response)
+      console.log(responseTranscribe)
+      setStep('generate')
     } catch (error) {
       console.error(error)
+    } finally {
+      setIsTranscribing(false)
     }
+  }
 
-    setLoading(false)
+  function handleUploaded(videos: Map<string, Video>) {
+    setVideosKeys(Array.from(videos.keys()))
+    setStep('transcribe')
   }
 
   return (
     <form onSubmit={handleSubmit(submit)}>
-      {step === 'upload' && <UploadStep />}
+      {step === 'upload' && <UploadStep onNextStep={handleUploaded} />}
       {step === 'transcribe' && (
         <TranscribeStep
           {...register('transcriptionPrompt')}
-          loading={loading}
+          loading={isTranscribing}
         />
       )}
+      {step === 'generate' && <FinishStep videosKeys={videosKeys} />}
     </form>
   )
 }
