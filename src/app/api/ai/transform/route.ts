@@ -27,7 +27,7 @@ export async function POST(request: Request) {
     console.log(chalk.yellow(`Transforming text in post: ${videoKey}`))
 
     const data = {
-      model: 'gpt-3.5-turbo-16k',
+      model: 'gpt-4-32k',
       messages: [
         {
           content:
